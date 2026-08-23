@@ -14,5 +14,6 @@ int eru_init(struct eru_ctx *ctx, const struct FramebufferInfo *fb);
 void eru_clear(struct eru_ctx *ctx, u32 color);
 void eru_pixel(struct eru_ctx *ctx, u32 x, u32 y, u32 color);
 void eru_str(struct eru_ctx *ctx, u32 x, u32 y, const char *s, u32 fg, u32 bg);
+void eru_3d_cube(struct eru_ctx *ctx, u32 angle, u32 color, u32 scale);
 
 #endif
