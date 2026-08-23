@@ -5,48 +5,65 @@ extern const unsigned int render_program_len;
 
 static unsigned char tape[65536];
 
-static void bf_malbolge_exec(const unsigned char *prog, unsigned int len,
-                             u64 fb_base, u32 w, u32 h, u32 pitch,
-                             u32 arg0, u32 arg1, u32 arg2) {
-    unsigned int ip = 0;
-    unsigned int dp = 0;
-    u32 px = arg0;
-    u32 py = arg1;
-    u32 color = arg2;
+enum eru_cmd {
+    ERU_CMD_CLEAR = 0,
+    ERU_CMD_PIXEL = 1,
+    ERU_CMD_CHAR  = 2,
+    ERU_CMD_STR   = 3
+};
 
-    while (ip < len) {
-        unsigned char c = prog[ip];
+static void eru_exec(u8 cmd, struct eru_ctx *ctx, u32 a0, u32 a1, u32 a2) {
+    tape[0] = cmd;
+    tape[1] = (u8)(a0 & 0xFF);
+    tape[2] = (u8)((a0 >> 8) & 0xFF);
+    tape[3] = (u8)(a1 & 0xFF);
+    tape[4] = (u8)((a1 >> 8) & 0xFF);
+    tape[5] = (u8)(a2 & 0xFF);
+    tape[6] = (u8)((a2 >> 8) & 0xFF);
+    tape[7] = (u8)(ctx->w & 0xFF);
+    tape[8] = (u8)((ctx->w >> 8) & 0xFF);
+    tape[9] = (u8)(ctx->h & 0xFF);
+    tape[10] = (u8)((ctx->h >> 8) & 0xFF);
+
+    unsigned int ip = 0;
+    unsigned int dp = 11;
+
+    while (ip < render_program_len) {
+        unsigned char c = render_program[ip];
         switch (c) {
             case '>': dp++; break;
             case '<': dp--; break;
             case '+': tape[dp]++; break;
             case '-': tape[dp]--; break;
             case '.':
-                if (px < w && py < h) {
-                    u32 *ptr = (u32 *)(fb_base + (py * pitch) + (px * 4));
-                    *ptr = color;
+                {
+                    u32 px = tape[dp] | (tape[dp+1] << 8);
+                    u32 py = tape[dp+2] | (tape[dp+3] << 8);
+                    u32 col = tape[dp+4] | (tape[dp+5] << 8) | (tape[dp+6] << 16);
+                    if (px < ctx->w && py < ctx->h) {
+                        u32 *ptr = (u32 *)(ctx->base + (py * ctx->pitch) + (px * 4));
+                        *ptr = col;
+                    }
                 }
-                px++;
-                if (px >= w) { px = 0; py++; }
                 break;
-            case ',': tape[dp] = (unsigned char)(color & 0xFF); break;
+            case ',': tape[dp] = 0; break;
             case '[':
                 if (tape[dp] == 0) {
-                    int depth = 1;
-                    while (depth > 0 && ip < len) {
+                    int d = 1;
+                    while (d > 0 && ip < render_program_len) {
                         ip++;
-                        if (prog[ip] == '[') depth++;
-                        if (prog[ip] == ']') depth--;
+                        if (render_program[ip] == '[') d++;
+                        if (render_program[ip] == ']') d--;
                     }
                 }
                 break;
             case ']':
                 if (tape[dp] != 0) {
-                    int depth = 1;
-                    while (depth > 0 && ip > 0) {
+                    int d = 1;
+                    while (d > 0 && ip > 0) {
                         ip--;
-                        if (prog[ip] == ']') depth++;
-                        if (prog[ip] == '[') depth--;
+                        if (render_program[ip] == ']') d++;
+                        if (render_program[ip] == '[') d--;
                     }
                 }
                 break;
@@ -68,31 +85,16 @@ int eru_init(struct eru_ctx *ctx, const struct FramebufferInfo *fb) {
 }
 
 void eru_clear(struct eru_ctx *ctx, u32 color) {
-    for (u32 y = 0; y < ctx->h; y++) {
-        for (u32 x = 0; x < ctx->w; x++) {
-            bf_malbolge_exec(render_program, render_program_len,
-                             ctx->base, ctx->w, ctx->h, ctx->pitch,
-                             x, y, color);
-        }
-    }
+    eru_exec(ERU_CMD_CLEAR, ctx, 0, 0, color);
 }
 
 void eru_pixel(struct eru_ctx *ctx, u32 x, u32 y, u32 color) {
-    bf_malbolge_exec(render_program, render_program_len,
-                     ctx->base, ctx->w, ctx->h, ctx->pitch,
-                     x, y, color);
+    eru_exec(ERU_CMD_PIXEL, ctx, x, y, color);
 }
 
 void eru_str(struct eru_ctx *ctx, u32 x, u32 y, const char *s, u32 fg, u32 bg) {
     while (*s) {
-        for (u32 row = 0; row < 8; row++) {
-            for (u32 col = 0; col < 8; col++) {
-                u32 c = ((*s >> col) & 1) ? fg : bg;
-                bf_malbolge_exec(render_program, render_program_len,
-                                 ctx->base, ctx->w, ctx->h, ctx->pitch,
-                                 x + col, y + row, c);
-            }
-        }
+        eru_exec(ERU_CMD_CHAR, ctx, x, y, (u32)(*s));
         x += 8;
         s++;
     }
