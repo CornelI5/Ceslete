@@ -1,0 +1,17 @@
+# Clear screen: set color then output pixels
+# Tape layout: [0]=cmd [1-2]=x [3-4]=y [5-6]=color
+
+SET 0          # command = clear
+MOVE 5         # dp = 5 (color position)
+SET 26         # color = 0x1A (dark gray)
+OUT            # signal to VM
+
+# Single pixel at (10, 10) red
+SET 1          # command = pixel
+MOVE 1         # dp = 1
+SET 10         # x = 10
+MOVE 2         # dp = 3
+SET 10         # y = 10  
+MOVE 2         # dp = 5
+SET 255        # color R channel
+OUT            # signal to VM
