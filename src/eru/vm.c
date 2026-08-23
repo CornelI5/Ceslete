@@ -6,10 +6,10 @@ extern const unsigned int render_program_len;
 static unsigned char tape[65536];
 
 enum eru_cmd {
-    ERU_CMD_CLEAR = 0,
-    ERU_CMD_PIXEL = 1,
-    ERU_CMD_CHAR  = 2,
-    ERU_CMD_STR   = 3
+    ERU_CMD_CLEAR   = 0,
+    ERU_CMD_PIXEL   = 1,
+    ERU_CMD_CHAR    = 2,
+    ERU_CMD_CUBE    = 3
 };
 
 static void eru_exec(u8 cmd, struct eru_ctx *ctx, u32 a0, u32 a1, u32 a2) {
@@ -24,9 +24,11 @@ static void eru_exec(u8 cmd, struct eru_ctx *ctx, u32 a0, u32 a1, u32 a2) {
     tape[8] = (u8)((ctx->w >> 8) & 0xFF);
     tape[9] = (u8)(ctx->h & 0xFF);
     tape[10] = (u8)((ctx->h >> 8) & 0xFF);
+    tape[11] = (u8)((a0 >> 16) & 0xFF);
+    tape[12] = (u8)((a1 >> 16) & 0xFF);
 
     unsigned int ip = 0;
-    unsigned int dp = 11;
+    unsigned int dp = 13;
 
     while (ip < render_program_len) {
         unsigned char c = render_program[ip];
@@ -39,7 +41,7 @@ static void eru_exec(u8 cmd, struct eru_ctx *ctx, u32 a0, u32 a1, u32 a2) {
                 {
                     u32 px = tape[dp] | (tape[dp+1] << 8);
                     u32 py = tape[dp+2] | (tape[dp+3] << 8);
-                    u32 col = tape[dp+4] | (tape[dp+5] << 8) | (tape[dp+6] << 16);
+                    u32 col = tape[dp+4] | (tape[dp+5] << 16) | (tape[dp+6] << 24);
                     if (px < ctx->w && py < ctx->h) {
                         u32 *ptr = (u32 *)(ctx->base + (py * ctx->pitch) + (px * 4));
                         *ptr = col;
@@ -98,4 +100,8 @@ void eru_str(struct eru_ctx *ctx, u32 x, u32 y, const char *s, u32 fg, u32 bg) {
         x += 8;
         s++;
     }
+}
+
+void eru_3d_cube(struct eru_ctx *ctx, u32 angle, u32 color, u32 scale) {
+    eru_exec(ERU_CMD_CUBE, ctx, angle, color, scale);
 }
